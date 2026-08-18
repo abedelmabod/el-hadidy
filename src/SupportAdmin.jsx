@@ -13,7 +13,16 @@ import Swal from 'sweetalert2';
 import { db } from './firebase';
 import ThemeToggle from './ThemeToggle';
 
-const YEAR_TABS = ['الكل', 'الفرقة الأولى', 'الفرقة الثانية', 'الفرقة الثالثة', 'الفرقة الرابعة'];
+const YEAR_TABS = [
+  'الكل',
+  'الفرقة الأولى',
+  'الفرقة الثانية',
+  'الفرقة الثالثة',
+  'الفرقة الرابعة',
+  'الصف الأول الثانوي',
+  'الصف الثاني الثانوي',
+  'الصف الثالث الثانوي',
+];
 
 const STATUS_FILTERS = [
   { id: 'all', label: 'كل الحالات' },
@@ -95,7 +104,13 @@ function SupportAdmin({ setUser, theme, themeMode, toggleTheme, supportRequests 
         .join(' ')
         .toLowerCase();
       const matchesSearch = !normalizedSearch || searchable.includes(normalizedSearch);
-      const matchesYear = activeYear === 'الكل' || student.year === activeYear || student.codeYear === activeYear;
+      const studentYears = [
+        student.year,
+        student.codeYear,
+        student.accessYear,
+        ...(Array.isArray(student.accessYears) ? student.accessYears : []),
+      ].filter(Boolean);
+      const matchesYear = activeYear === 'الكل' || studentYears.includes(activeYear);
       const matchesStatus =
         statusFilter === 'all' ||
         (statusFilter === 'active' && !student.isBanned) ||
@@ -543,7 +558,7 @@ function SupportAdmin({ setUser, theme, themeMode, toggleTheme, supportRequests 
                         {student.name || 'طالب بدون اسم'}
                       </div>
                       <div style={{ color: theme.subText, fontSize: '13px' }}>
-                        @{student.username || 'بدون اسم مستخدم'} • {student.year || 'بدون فرقة'}
+                      @{student.username || 'بدون اسم مستخدم'} • {student.year || 'بدون مرحلة'}
                       </div>
                       <div style={{ color: theme.subText, fontSize: '12px', marginTop: '4px' }}>
                         {student.phone || 'لا يوجد رقم هاتف'} • {student.deviceId ? 'جهاز مسجل' : 'بدون جهاز'}

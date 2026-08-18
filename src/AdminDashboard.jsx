@@ -60,7 +60,17 @@ const AdminDashboard = ({
     },
   ]);
 
-  const yearOptions = ["الفرقة الأولى", "الفرقة الثانية", "الفرقة الثالثة", "الفرقة الرابعة"];
+  const stageGroups = [
+    {
+      label: "طلاب الكليات",
+      options: ["الفرقة الأولى", "الفرقة الثانية", "الفرقة الثالثة", "الفرقة الرابعة"],
+    },
+    {
+      label: "طلاب الثانوية العامة",
+      options: ["الصف الأول الثانوي", "الصف الثاني الثانوي", "الصف الثالث الثانوي"],
+    },
+  ];
+  const yearOptions = stageGroups.flatMap((group) => group.options);
   const yearFilters = ["الكل", ...yearOptions];
   const isLightTheme = theme?.mode === 'light';
   const visibleBorder = isLightTheme ? '#CBD5E1' : theme.borderSoft;
@@ -427,7 +437,7 @@ const AdminDashboard = ({
 
   const buildPushEmptyMessage = (stats = {}) => {
     if (!stats.matchedStudents) {
-      return `لا يوجد طلاب مطابقون للفرقة ${stats.targetYear || ''}. راجع الفرقة المختارة أو بيانات الطلاب.`;
+      return `لا يوجد طلاب مطابقون للمرحلة ${stats.targetYear || ''}. راجع المرحلة المختارة أو بيانات الطلاب.`;
     }
 
     const details = [
@@ -448,18 +458,18 @@ const AdminDashboard = ({
       || stats.permissionDenied
       || stats.banned
     ) {
-      return `يوجد ${stats.matchedStudents} طالب في هذه الفرقة، لكن لا يوجد جهاز صالح لاستقبال الإشعار حالياً. التفاصيل: ${details}. افتح APK الإصدار 4 من حساب طالب مطابق لنفس الفرقة ووافق على الإشعارات.`;
+      return `يوجد ${stats.matchedStudents} طالب في هذه المرحلة، لكن لا يوجد جهاز صالح لاستقبال الإشعار حالياً. التفاصيل: ${details}. افتح APK الإصدار 4 من حساب طالب مطابق لنفس المرحلة ووافق على الإشعارات.`;
     }
 
     if (stats.invalidToken) {
-      return `يوجد ${stats.invalidToken} توكن إشعارات غير صالح لهذه الفرقة. افتح التطبيق من نسخة APK الإصدار 4 مرة أخرى لتجديد التوكن.`;
+      return `يوجد ${stats.invalidToken} توكن إشعارات غير صالح لهذه المرحلة. افتح التطبيق من نسخة APK الإصدار 4 مرة أخرى لتجديد التوكن.`;
     }
 
     if (stats.permissionDenied) {
       return 'الطلاب المطابقون رفضوا صلاحية الإشعارات من إعدادات الهاتف.';
     }
 
-    return 'لا توجد أجهزة صالحة لاستقبال الإشعار لهذه الفرقة حالياً.';
+    return 'لا توجد أجهزة صالحة لاستقبال الإشعار لهذه المرحلة حالياً.';
   };
 
   const sendPushNotification = async ({ title, body, year, lessonId, lessonTitle, lesson = {} }) => {
@@ -927,7 +937,7 @@ const AdminDashboard = ({
       !payload.title && "عنوان المحاضرة",
       !payload.url && "رابط الفيديو",
       !payload.subject && "المادة",
-      !payload.year && "الفرقة",
+      !payload.year && "المرحلة",
       !payload.semester && "الترم",
     ].filter(Boolean);
 
@@ -1144,7 +1154,7 @@ const AdminDashboard = ({
   };
 
   const generateCodes = () => {
-    if (selectedYear === 'الكل') return Swal.fire({ background: theme.surface, color: theme.text, icon:'warning', title:'اختر فرقة أولاً'});
+    if (selectedYear === 'الكل') return Swal.fire({ background: theme.surface, color: theme.text, icon:'warning', title:'اختر مرحلة أولاً'});
     const quantity = Math.min(500, Math.max(1, Number(keepEnglishDigitsOnly(codeQty)) || 1));
     confirmAction(`توليد ${quantity} كود؟`, `لـ ${selectedYear}`, async () => {
       const batch = writeBatch(db);
@@ -1445,7 +1455,7 @@ const AdminDashboard = ({
       description: newLesson?.description || "",
       subject: selectedSubject?.name || newLesson?.subject || "بدون مادة",
       chapterName: selectedChapter?.name || newLesson?.chapterName || "بدون شابتر",
-      year: newLesson?.year || "بدون فرقة",
+      year: newLesson?.year || "بدون مرحلة",
       semester: newLesson?.semester || "بدون ترم",
       url: newLesson?.url || "",
       pdfUrl: newLesson?.pdfUrl || "",
@@ -1487,7 +1497,13 @@ const AdminDashboard = ({
   const visibleStudents = studentsDB?.filter((student) => {
     const term = searchTerm.trim().toLowerCase();
     const matchesSearch = !term || student.name?.toLowerCase().includes(term) || student.username?.toLowerCase().includes(term) || student.phone?.includes(searchTerm.trim());
-    const matchesYear = studentYearFilter === "الكل" || student.year === studentYearFilter || student.codeYear === studentYearFilter;
+    const studentYears = [
+      student.year,
+      student.codeYear,
+      student.accessYear,
+      ...(Array.isArray(student.accessYears) ? student.accessYears : []),
+    ].filter(Boolean);
+    const matchesYear = studentYearFilter === "الكل" || studentYears.includes(studentYearFilter);
     const matchesStatus =
       studentStatusFilter === "all" ||
       (studentStatusFilter === "subscribed" && student.isSubscribed && !student.isBanned) ||
@@ -1551,7 +1567,7 @@ const AdminDashboard = ({
       type: "كود",
       icon: "fa-ticket-alt",
       title: code.code,
-      subtitle: `${code.year || "بدون فرقة"} • ${code.isUsed ? "مستخدم" : "متاح"}`,
+      subtitle: `${code.year || "بدون مرحلة"} • ${code.isUsed ? "مستخدم" : "متاح"}`,
       action: () => { setActiveTab("codes"); setCodesYearFilter(code.year || "الكل"); setStatusFilter(code.isUsed ? "used" : "available"); setGlobalSearch(""); },
     })),
     ...subjects.filter((subject) => String(subject.name || "").toLowerCase().includes(globalSearchTerm)).slice(0, 4).map((subject) => ({
@@ -1626,7 +1642,15 @@ const AdminDashboard = ({
   });
   const maxDailyActivity = Math.max(1, ...lastSevenDays.map((day) => day.total));
   const mostActiveYear = yearOptions
-    .map((year) => ({ year, count: studentsDB.filter((student) => student.year === year || student.codeYear === year).length }))
+    .map((year) => ({
+      year,
+      count: studentsDB.filter((student) => [
+        student.year,
+        student.codeYear,
+        student.accessYear,
+        ...(Array.isArray(student.accessYears) ? student.accessYears : []),
+      ].filter(Boolean).includes(year)).length,
+    }))
     .sort((a, b) => b.count - a.count)[0];
   const lessonsWithoutChapter = lessons.filter((lesson) => !lesson.chapterId && !lesson.chapterName).length;
   const selectedFormSubject = subjects.find((subject) => subject.id === newLesson?.subjectId || subject.name === newLesson?.subject);
@@ -1694,7 +1718,7 @@ const AdminDashboard = ({
 
     if (includesAny(["محاضرة", "محاضرات", "فيديو", "نشر"])) {
       return {
-        text: `لإضافة محاضرة: افتح "إدارة المحتوى"، اكتب العنوان والوصف، اختر الفرقة والترم والمادة، ثم اختر الشابتر وارفع الفيديو أو ضع الرابط. قبل النشر استخدم زر "معاينة" للتأكد من أن الفيديو والمادة والشابتر صحيحين.`,
+      text: `لإضافة محاضرة: افتح "إدارة المحتوى"، اكتب العنوان والوصف، اختر المرحلة والترم والمادة، ثم اختر الشابتر وارفع الفيديو أو ضع الرابط. قبل النشر استخدم زر "معاينة" للتأكد من أن الفيديو والمادة والشابتر صحيحين.`,
         actionLabel: "فتح إدارة المحتوى",
         action: openLessonComposer,
       };
@@ -1702,7 +1726,7 @@ const AdminDashboard = ({
 
     if (includesAny(["كود", "اكواد", "أكواد", "تفعيل", "اشتراك"])) {
       return {
-        text: `الأكواد الصحيحة تتفعل تلقائياً للطالب الآن. من صفحة الأكواد يمكنك توليد أكواد حسب الفرقة، فلترة المتاح والمستخدم، نسخ كود، تصدير PDF، أو حذف مجموعة أكواد محددة.`,
+      text: `الأكواد الصحيحة تتفعل تلقائياً للطالب الآن. من صفحة الأكواد يمكنك توليد أكواد حسب المرحلة، فلترة المتاح والمستخدم، نسخ كود، تصدير PDF، أو حذف مجموعة أكواد محددة.`,
         actionLabel: "فتح صفحة الأكواد",
         action: () => setActiveTab("codes"),
       };
@@ -1710,7 +1734,7 @@ const AdminDashboard = ({
 
     if (includesAny(["طالب", "طلاب", "بحث", "جهاز", "حظر", "فك حظر"])) {
       return {
-        text: `لإدارة الطلاب: افتح صفحة الطلاب، استخدم البحث بالاسم أو الرقم، ثم فلتر حسب الفرقة أو الحالة أو الجهاز. من الإجراءات يمكنك تصفير الجهاز، حظر/فك حظر الطالب، أو حذف الحساب.`,
+      text: `لإدارة الطلاب: افتح صفحة الطلاب، استخدم البحث بالاسم أو الرقم، ثم فلتر حسب المرحلة أو الحالة أو الجهاز. من الإجراءات يمكنك تصفير الجهاز، حظر/فك حظر الطالب، أو حذف الحساب.`,
         actionLabel: "فتح الطلاب",
         action: () => setActiveTab("students"),
       };
@@ -1726,7 +1750,7 @@ const AdminDashboard = ({
 
     if (includesAny(["مادة", "مواد", "شابتر", "شابترات", "فصل", "فصول", "ترتيب"])) {
       return {
-        text: `لتنظيم المحتوى: افتح إدارة المحتوى، أضف المادة، ثم أضف الشابترات داخلها وحدد الفرقة. بعد ذلك أضف المحاضرة واربطها بنفس المادة والشابتر من نفس الصفحة.`,
+      text: `لتنظيم المحتوى: افتح إدارة المحتوى، أضف المادة، ثم أضف الشابترات داخلها وحدد المرحلة. بعد ذلك أضف المحاضرة واربطها بنفس المادة والشابتر من نفس الصفحة.`,
         actionLabel: "فتح إدارة المحتوى",
         action: openContentManager,
       };
@@ -1897,7 +1921,7 @@ const AdminDashboard = ({
                 <div className="insight-list">
                   <div><i className="fas fa-ticket-alt"></i><strong>{codesDB.filter(c => !c.isUsed).length}</strong><span>كود متاح حالياً</span></div>
                   <div><i className="fas fa-layer-group"></i><strong>{lessonsWithoutChapter}</strong><span>محاضرة بدون شابتر</span></div>
-                  <div><i className="fas fa-graduation-cap"></i><strong>{mostActiveYear?.year || 'لا يوجد'}</strong><span>أكثر فرقة نشاطاً ({mostActiveYear?.count || 0})</span></div>
+              <div><i className="fas fa-graduation-cap"></i><strong>{mostActiveYear?.year || 'لا يوجد'}</strong><span>أكثر مرحلة نشاطاً ({mostActiveYear?.count || 0})</span></div>
                 </div>
               </div>
             </div>
@@ -1916,7 +1940,7 @@ const AdminDashboard = ({
                 {recentStudents.length ? recentStudents.map((student) => (
                   <div className="ops-row" key={student.id}>
                     <span className={`ops-status ${student.isBanned ? 'danger' : 'success'}`}></span>
-                    <div><strong>{student.name || student.username}</strong><small>{student.year || student.codeYear || 'بدون فرقة'}</small></div>
+                  <div><strong>{student.name || student.username}</strong><small>{student.year || student.codeYear || 'بدون مرحلة'}</small></div>
                   </div>
                 )) : <div className="ops-empty">لا يوجد طلاب بعد</div>}
               </div>
@@ -2071,13 +2095,13 @@ const AdminDashboard = ({
               <div className="content-panel-head">
                 <div>
                   <strong>
-                    {contentStep === "years" && "اختار الفرقة"}
+                {contentStep === "years" && "اختار المرحلة"}
                     {contentStep === "subjects" && `مواد ${selectedContentYear}`}
                     {contentStep === "chapters" && `${selectedContentSubject?.name} - ${selectedContentYear}`}
                     {contentStep === "lessons" && `${selectedContentChapter?.name} - ${selectedContentSubject?.name}`}
                   </strong>
                   <span>
-                    {contentStep === "years" && "اضغط على الفرقة لفتح شاشة المواد الخاصة بها."}
+                {contentStep === "years" && "اضغط على المرحلة لفتح شاشة المواد الخاصة بها."}
                     {contentStep === "subjects" && "اضغط على المادة لفتح شاشة الشباتر الخاصة بها."}
                     {contentStep === "chapters" && "اختار الشابتر لعرض محتواه أو أضف شابتر جديد."}
                     {contentStep === "lessons" && "راجع محاضرات وملفات الشابتر، وعدل أو أخف المحتوى بسرعة."}
@@ -2090,7 +2114,7 @@ const AdminDashboard = ({
               </div>
 
               <div className="content-breadcrumbs">
-                <button className={contentStep === "years" ? "active" : ""} onClick={backToContentYears}>الفرق</button>
+              <button className={contentStep === "years" ? "active" : ""} onClick={backToContentYears}>المراحل</button>
                 {isContentYearOpen && <button className={contentStep === "subjects" ? "active" : ""} onClick={backToContentSubjects}>{selectedContentYear}</button>}
                 {selectedContentSubject && <button className={contentStep === "chapters" ? "active" : ""} onClick={backToContentChapters}>{selectedContentSubject.name}</button>}
                 {selectedContentChapter && <button className="active">{selectedContentChapter.name}</button>}
@@ -2309,7 +2333,7 @@ const AdminDashboard = ({
                             </select>
                           </label>
                           <label>
-                            <strong>الفرقة:</strong>
+                  <strong>المرحلة:</strong>
                             <select className="gold-input lesson-modal-input" value={newLesson?.year || selectedContentYear} onChange={e => setNewLesson(prev => ({ ...prev, year: e.target.value, chapterId: "", chapterName: "" }))}>
                               {yearOptions.map((year) => <option key={year} value={year}>{year}</option>)}
                             </select>
@@ -2388,7 +2412,7 @@ const AdminDashboard = ({
                     <i className="fas fa-sitemap"></i>
                     <div>
                       <strong>تنظيم المحتوى</strong>
-                      <span>اختر الفرقة والترم ثم المادة والشابتر</span>
+                  <span>اختر المرحلة والترم ثم المادة والشابتر</span>
                     </div>
                   </div>
                   <div className="form-grid">
@@ -2513,7 +2537,7 @@ const AdminDashboard = ({
                 { label: 'الاسم', value: (s) => s.name || '' },
                 { label: 'اسم المستخدم', value: (s) => s.username || '' },
                 { label: 'الرقم', value: (s) => s.phone || 'غير متوفر' },
-                { label: 'الفرقة', value: (s) => s.year || s.codeYear || '' },
+                { label: 'المرحلة', value: (s) => s.year || s.codeYear || '' },
                 { label: 'الاشتراك', value: (s) => s.isSubscribed ? 'مفعل' : 'غير مفعل' },
                 { label: 'الأجهزة', value: (s) => `${getStudentDeviceIds(s).length}/${getStudentMaxDevices(s)}` },
                 { label: 'تصوير الشاشة', value: (s) => isStudentScreenshotAllowed(s) ? 'مسموح' : 'ممنوع' },
@@ -2524,7 +2548,7 @@ const AdminDashboard = ({
             </div>
             <div className="table-container">
               <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                <thead><tr style={{ background: theme.surfaceAlt, color: theme.accent }}><th>الاسم</th><th>الرقم</th><th>الجهاز</th><th>الفرقة</th><th>الحالة</th><th>الإجراءات</th></tr></thead>
+                <thead><tr style={{ background: theme.surfaceAlt, color: theme.accent }}><th>الاسم</th><th>الرقم</th><th>الجهاز</th><th>المرحلة</th><th>الحالة</th><th>الإجراءات</th></tr></thead>
                 <tbody>
                   {visibleStudents.map(s => (
                     <tr key={s.id} style={{ borderBottom: `1px solid ${theme.borderSoft}`, textAlign: 'center' }}>
@@ -2573,16 +2597,17 @@ const AdminDashboard = ({
                   <i className="fas fa-magic"></i>
                   <div>
                     <strong>توليد أكواد جديدة</strong>
-                    <span>اختر الفرقة وعدد الأكواد المطلوبة</span>
+                    <span>اختر المرحلة وعدد الأكواد المطلوبة</span>
                   </div>
                 </div>
                 <div className="codes-control-row">
                   <select className="gold-input" value={selectedYear} onChange={e => setSelectedYear(e.target.value)}>
-                    <option value="الكل">اختر الفرقة</option>
-                    <option value="الفرقة الأولى">الفرقة الأولى</option>
-                    <option value="الفرقة الثانية">الفرقة الثانية</option>
-                    <option value="الفرقة الثالثة">الفرقة الثالثة</option>
-                    <option value="الفرقة الرابعة">الفرقة الرابعة</option>
+                    <option value="الكل">اختر المرحلة</option>
+                    {stageGroups.map((group) => (
+                      <optgroup key={group.label} label={group.label}>
+                        {group.options.map((year) => <option key={year} value={year}>{year}</option>)}
+                      </optgroup>
+                    ))}
                   </select>
                   <input type="text" inputMode="numeric" dir="ltr" min="1" max="500" value={codeQty} onChange={e => setCodeQty(keepEnglishDigitsOnly(e.target.value))} className="gold-input" />
                   <button onClick={generateCodes} className="btn-primary">توليد</button>
@@ -2594,16 +2619,17 @@ const AdminDashboard = ({
                   <i className="fas fa-filter"></i>
                   <div>
                     <strong>فلترة وتصدير</strong>
-                    <span>اعرض الأكواد حسب الفرقة والحالة ثم صدّر نفس النتائج PDF</span>
+                    <span>اعرض الأكواد حسب المرحلة والحالة ثم صدّر نفس النتائج PDF</span>
                   </div>
                 </div>
                 <div className="codes-control-row">
                   <select className="gold-input" value={codesYearFilter} onChange={e => setCodesYearFilter(e.target.value)}>
-                    <option value="الكل">كل الفرق</option>
-                    <option value="الفرقة الأولى">الفرقة الأولى</option>
-                    <option value="الفرقة الثانية">الفرقة الثانية</option>
-                    <option value="الفرقة الثالثة">الفرقة الثالثة</option>
-                    <option value="الفرقة الرابعة">الفرقة الرابعة</option>
+                    <option value="الكل">كل المراحل</option>
+                    {stageGroups.map((group) => (
+                      <optgroup key={group.label} label={group.label}>
+                        {group.options.map((year) => <option key={year} value={year}>{year}</option>)}
+                      </optgroup>
+                    ))}
                   </select>
                   <select className="gold-input" value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
                     <option value="all">كل الحالات</option>
@@ -2628,7 +2654,7 @@ const AdminDashboard = ({
             <div className="codes-visibility-bar">
               <div>
                 <strong>{showCodes ? 'قائمة الأكواد مفتوحة الآن' : 'قائمة الأكواد مخفية لتنظيم الصفحة'}</strong>
-                <span>التوليد وفلترة الفرقة وتصدير PDF متاحين بدون فتح القائمة.</span>
+                  <span>التوليد وفلترة المرحلة وتصدير PDF متاحين بدون فتح القائمة.</span>
               </div>
               <button className={showCodes ? "btn-red-solid" : "btn-secondary"} onClick={() => setShowCodes((current) => !current)}>
                 <i className={`fas ${showCodes ? 'fa-chevron-up' : 'fa-chevron-down'}`}></i>
@@ -2665,7 +2691,7 @@ const AdminDashboard = ({
                         </div>
                       </div>
                       <div className="code-value">{c.code}</div>
-                      <div className="code-year">{c.year || 'بدون فرقة'}</div>
+                        <div className="code-year">{c.year || 'بدون مرحلة'}</div>
                       {codeStatus === 'paused' ? (
                         <div className="code-paused-note">الكود موقوف مؤقتاً ولا يفتح المحتوى</div>
                       ) : c.isUsed ? (
@@ -2755,8 +2781,8 @@ const AdminDashboard = ({
               </div>
 
               <div className="profile-stats-grid">
-                <div><strong>{selectedStudentProfile.year || 'غير محدد'}</strong><span>فرقة التسجيل</span></div>
-                <div><strong>{selectedStudentProfile.codeYear || selectedStudentProfile.accessYear || 'غير مفعل'}</strong><span>فرقة الوصول</span></div>
+              <div><strong>{selectedStudentProfile.year || 'غير محدد'}</strong><span>مرحلة التسجيل</span></div>
+              <div><strong>{selectedStudentProfile.codeYear || selectedStudentProfile.accessYear || 'غير مفعل'}</strong><span>مرحلة الوصول</span></div>
                 <div><strong>{selectedStudentProfile.isSubscribed ? 'مفعل' : 'غير مفعل'}</strong><span>الاشتراك</span></div>
                 <div><strong>{getStudentDeviceIds(selectedStudentProfile).length}/{getStudentMaxDevices(selectedStudentProfile)}</strong><span>الأجهزة</span></div>
                 <div><strong>{isStudentScreenshotAllowed(selectedStudentProfile) ? 'مسموح' : 'ممنوع'}</strong><span>تصوير الشاشة</span></div>

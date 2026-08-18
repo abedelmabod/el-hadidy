@@ -17,6 +17,16 @@ const OFFICIAL_LINKS = {
   deleteAccount: 'https://el-hadidy-ei6w.vercel.app/delete-account',
 };
 
+const STUDY_STAGE_OPTIONS = [
+  'الفرقة الأولى',
+  'الفرقة الثانية',
+  'الفرقة الثالثة',
+  'الفرقة الرابعة',
+  'الصف الأول الثانوي',
+  'الصف الثاني الثانوي',
+  'الصف الثالث الثانوي',
+];
+
 const Login = ({ setUser, theme, themeMode, toggleTheme }) => {
   const [isRegistering, setIsRegistering] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -166,10 +176,7 @@ const Login = ({ setUser, theme, themeMode, toggleTheme }) => {
             <div className="input-group">
                 <i className="fas fa-layer-group"></i>
                 <select className="gold-select" value={regData.year} onChange={e => setRegData({...regData, year: e.target.value})}>
-                    <option value="الفرقة الأولى">الفرقة الأولى</option>
-                    <option value="الفرقة الثانية">الفرقة الثانية</option>
-                    <option value="الفرقة الثالثة">الفرقة الثالثة</option>
-                    <option value="الفرقة الرابعة">الفرقة الرابعة</option>
+                    {STUDY_STAGE_OPTIONS.map((year) => <option key={year} value={year}>{year}</option>)}
                 </select>
             </div>
             <button type="submit" className="login-btn" disabled={loading}>إنشاء الحساب</button>

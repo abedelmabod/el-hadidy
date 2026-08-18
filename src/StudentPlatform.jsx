@@ -188,7 +188,7 @@ const StudentPlatform = ({ user, setUser, lessons, announcement, theme, themeMod
       await addDoc(collection(db, "logs"), {
         studentId: user.id,
         studentName: studentDetails?.name || user.name,
-        action: `تفعيل كود تلقائي لفرقة ${accessYear}`,
+          action: `تفعيل كود تلقائي لمرحلة ${accessYear}`,
         code: cleanCode,
         alertType: "code_activation",
         seen: true,
@@ -290,7 +290,7 @@ const StudentPlatform = ({ user, setUser, lessons, announcement, theme, themeMod
             <div className="lock-icon-container"><i className="fas fa-lock" style={{ fontSize: '50px', color: theme.accent }}></i></div>
             <h2 style={{ marginBottom: '10px' }}>المحتوى مقيد</h2>
             <p style={{ color: theme.subText, marginBottom: '30px' }}>
-              أدخل الكود الصحيح وسيتم تفعيل الحساب فوراً. إذا كان الكود لفرقة مختلفة سيتم فتح محتوى هذه الفرقة تلقائياً.
+            أدخل الكود الصحيح وسيتم تفعيل الحساب فوراً. إذا كان الرمز لمرحلة مختلفة سيتم فتح محتوى هذه المرحلة تلقائياً.
             </p>
             <div style={{ maxWidth: '400px', margin: '0 auto', display: 'flex', gap: '10px' }}>
               <input type="text" inputMode="numeric" dir="ltr" placeholder="أدخل كود التفعيل..." className="gold-input" value={inputCode} onChange={(e) => setInputCode(keepEnglishDigitsOnly(e.target.value))} />
@@ -361,7 +361,7 @@ const StudentPlatform = ({ user, setUser, lessons, announcement, theme, themeMod
                   <h3 style={{ fontSize: '22px' }}>{studentDetails?.name}</h3>
                   <p style={{ color: theme.accent }}>@{studentDetails?.username || user.username}</p>
                   <div style={{ display: 'grid', gap: '10px', marginTop: '18px', color: theme.text }}>
-                    <div>الفرقة: {studentDetails?.year}</div>
+                <div>المرحلة: {studentDetails?.year}</div>
                     <div>رقم الهاتف: {studentDetails?.phone || 'غير مسجل'}</div>
                     <div>الحالة: <span style={{ color: studentDetails?.isBanned ? theme.danger : theme.success }}>{studentDetails?.isBanned ? 'محظور' : 'نشط'}</span></div>
                     <div>الإشعارات: غير مفعلة على الويب</div>
