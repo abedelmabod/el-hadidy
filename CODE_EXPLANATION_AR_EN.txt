@@ -1,0 +1,454 @@
+شرح كود تطبيق الموبايل El-Hadidy / El-Hadidy Mobile Code Explanation
+====================================================================
+
+الملف ده بيشرح تطبيق الموبايل بتاع المنصة بالعامية وبطريقة واضحة، كأني أنا اللي كاتب ملاحظات المشروع وعايز أوضح هو مبني إزاي وبيشتغل إزاي.
+
+
+================
+الشرح بالعربي
+================
+
+1. فكرة التطبيق
+---------------
+تطبيق الموبايل هو التطبيق الأساسي للطالب. الطالب من خلاله يقدر:
+- يسجل دخول.
+- يعمل حساب جديد.
+- يختار المرحلة الجامعية أو المرحلة الثانوية.
+- يختار السنة أو الفرقة.
+- يدخل على المواد.
+- يدخل على الشباتر.
+- يشغل المحاضرات.
+- يشوف آخر ما شاهده.
+- يطلب دعم فني.
+- يطلب ربط بالكمبيوتر.
+- يغير ألوان التطبيق.
+- يفتح صفحات الخصوصية والشروط وحذف الحساب.
+
+مكان المشروع:
+el-hadidy-mobile
+
+2. التطبيق مبني بإيه؟
+---------------------
+التطبيق معمول بـ:
+- React Native
+- Expo SDK 57
+- JavaScript / JSX
+
+التنقل بين الشاشات:
+- React Navigation
+- Native Stack
+- Bottom Tabs
+
+الباك إند:
+- Firebase Authentication
+- Firebase Firestore
+- Firebase Storage
+
+الفيديوهات:
+- Bunny Stream / Bunny CDN
+- expo-video
+- WebView في حالة تشغيل Bunny embed
+
+التخزين المحلي:
+- AsyncStorage
+
+الإشعارات:
+- expo-notifications
+- expo-device
+
+حماية الشاشة:
+- expo-screen-capture
+
+3. ملفات الإعداد المهمة
+-----------------------
+package.json:
+فيه كل المكتبات. بعد التحديث، التطبيق بقى على Expo SDK 57.
+
+app.json:
+ده فيه إعدادات التطبيق للمتاجر:
+- اسم التطبيق.
+- package name للأندرويد.
+- bundleIdentifier للـ iOS.
+- الأيقونات.
+- splash screen.
+- صلاحيات الإشعارات.
+- إعدادات EAS.
+- دومين Bunny داخل extra.
+
+eas.json:
+ده خاص بالـ EAS Build ورفع التطبيق للمتاجر.
+
+firebase.json وfunctions:
+فيهم إعدادات Firebase Functions لو محتاجين backend مساعد.
+
+4. بداية التطبيق
+----------------
+index.js:
+ده بيسجل التطبيق مع Expo.
+
+App.js:
+ده أهم ملف في تشغيل التطبيق.
+
+بيعمل حاجات كتير:
+- يجهز SafeAreaProvider.
+- يجهز NavigationContainer.
+- يجهز GestureHandlerRootView.
+- يقرأ الثيم المحفوظ.
+- يقرأ جلسة الطالب من الكاش عشان التطبيق يفتح بسرعة.
+- يراقب Firebase Auth.
+- يسجل إشعارات الطالب.
+- يتعامل مع الضغط على إشعار محاضرة جديدة.
+- يحمل الشاشات الثقيلة lazy عشان البداية تبقى أسرع.
+
+5. الشاشات
+----------
+LoginScreen:
+شاشة تسجيل الدخول وإنشاء الحساب. فيها اختيار نوع الدراسة:
+- المرحلة الجامعية
+- المرحلة الثانوية
+
+وبعد ما الطالب يختار النوع، تظهر السنوات المناسبة له.
+
+StudentPlatform:
+الشاشة الرئيسية للطالب. فيها كروت:
+- الفيديوهات.
+- آخر ما شاهدته.
+- تأكيد التسجيل.
+- الربط بالكمبيوتر.
+- الدعم الفني.
+- حسابي.
+
+YearSelectionScreen:
+شاشة اختيار السنة أو الفرقة.
+
+SubjectsScreen:
+شاشة اختيار المادة. المفروض تعرض المواد الخاصة بالسنة المختارة بس.
+
+ChaptersScreen:
+شاشة اختيار الشابتر.
+
+LecturesScreen:
+شاشة اختيار المحاضرة أو الفيديو.
+
+VideoPlayerScreen:
+شاشة تشغيل الفيديو.
+
+WatchHistoryScreen:
+شاشة آخر ما شاهده الطالب.
+
+ComputerLinkScreen:
+شاشة الربط بالكمبيوتر، وبتفتح واتساب برسالة جاهزة للدعم الفني.
+
+ContactUs:
+شاشة الدعم الفني للطالب.
+
+LegalScreen:
+صفحات الخصوصية والشروط وحذف الحساب.
+
+6. تسجيل الدخول والحسابات
+-------------------------
+الخدمة الأساسية:
+src/services/auth-service.js
+
+الخدمة دي مسؤولة عن:
+- تسجيل الدخول.
+- إنشاء الحساب.
+- التعامل مع Firebase Auth.
+- حفظ بيانات الطالب في Firestore.
+- معرفة دور المستخدم.
+- ربط الجهاز.
+- عدد الأجهزة المسموحة.
+- تحويل الأرقام العربي لإنجليزي.
+- تجهيز رسائل خطأ مفهومة.
+
+ملف الجهاز:
+src/utils/deviceIdentity.js
+
+ده بيعمل معرف ثابت للجهاز عشان الحساب ميتفتحش على أجهزة زيادة عن المسموح.
+
+7. جلب بيانات الطالب والكاش
+---------------------------
+أهم hook:
+src/hooks/useStudentData.js
+
+ده من أهم أجزاء التطبيق لأنه بيجيب المحتوى بتاع الطالب.
+
+بيعمل:
+- يجيب بيانات الطالب.
+- يجيب الأكواد المفعلة.
+- يحدد السنوات أو الفرق المسموحة.
+- يجيب المواد.
+- يجيب الشباتر.
+- يجيب المحاضرات.
+- يفلتر المحتوى حسب صلاحية الطالب.
+- يدعم الجامعة والثانوي.
+- يتعامل مع اختلاف كتابة السنوات بالعربي.
+- يستخدم كاش في الذاكرة.
+- يستخدم كاش محفوظ في AsyncStorage.
+
+الفكرة هنا إن التطبيق يفتح بسرعة من الكاش، وبعدها يحدث البيانات من Firebase بهدوء.
+
+8. مشغل الفيديو
+---------------
+الشاشة الأساسية:
+src/screens/VideoPlayerScreen.js
+
+والمكون:
+src/components/VideoPlayer.js
+
+المشغل مبني على:
+- expo-video
+
+وفي حالة Bunny embed فيه:
+src/components/BunnyVideoPlayer.js
+
+مميزات المشغل:
+- تشغيل وإيقاف.
+- تقديم 10 ثواني.
+- رجوع 10 ثواني.
+- سرعات تشغيل.
+- حفظ آخر ثانية وقف عندها الطالب.
+- إخفاء البار السفلي أثناء الفيديو.
+- محاولة إخفاء أزرار Android navigation أثناء المشاهدة.
+- دعم تغيير اتجاه الشاشة.
+- تصحيح الصوت وقت تغيير السرعة عشان الصوت ميبقاش غريب.
+
+سرعات الفيديو الموجودة:
+0.5 / 0.75 / 0.9 / 1 / 1.1 / 1.25 / 1.5 / 1.75 / 2
+
+9. Bunny
+--------
+ملف:
+src/services/bunny-service.js
+
+ده بيحلل رابط Bunny ويطلعه كرابط تشغيل مناسب. يعني لو الرابط embed أو فيه library/video id، الخدمة بتحوله لصيغة تشغيل مناسبة للفيديو.
+
+10. آخر مشاهدة
+---------------
+ملف:
+src/utils/videoProgress.js
+
+ده بيحفظ:
+- آخر فيديو الطالب فتحه.
+- آخر ثانية وقف عندها.
+- خريطة تقدم لكل فيديو.
+
+وبيستخدم AsyncStorage.
+
+11. صلاحيات المحتوى
+-------------------
+ملف:
+src/utils/studentAccessGuard.js
+
+ده بيتأكد إن الطالب عنده كود فعال للمرحلة المطلوبة. لو مفيش كود أو الكود موقوف، يمنع الوصول للمحتوى.
+
+12. الثيمات
+------------
+ملف:
+src/theme/theme-config.js
+
+فيه ألوان وثيمات التطبيق.
+
+ThemePickerModal:
+نافذة اختيار اللون أو المود.
+
+ThemeToggleButton:
+زر سريع لتغيير الثيم.
+
+13. مكونات الطالب
+-----------------
+في مجلد:
+src/components/student
+
+فيه مكونات صغيرة مستخدمة في الشاشات:
+- CornerLogo
+- StudentBottomBar
+- SubjectCard
+- ChapterList
+- LectureRow
+
+14. الإشعارات
+--------------
+ملف:
+src/services/notification-service.js
+
+ده بيطلب صلاحية الإشعارات، ويجيب Expo Push Token، ويحفظه عشان الأدمن يقدر يبعت تنبيه للطالب لما ينزل محتوى جديد.
+
+15. طريقة تشغيل التطبيق
+-----------------------
+تثبيت:
+npm install
+
+تشغيل Expo:
+npx expo start --clear --lan
+
+تشغيل Android:
+npx expo start --android
+
+تشغيل iOS:
+npx expo start --ios
+
+بناء Android:
+npx eas build --platform android
+
+بناء iOS:
+npx eas build --platform ios
+
+رفع iOS:
+npx eas submit --platform ios --latest
+
+
+================
+English Explanation
+================
+
+1. App Idea
+-----------
+This is the main student mobile app for the El-Hadidy platform. Students can log in, create accounts, choose education type, browse their allowed content, watch lectures, contact support, link a computer account, change theme, and access legal pages.
+
+Project folder:
+el-hadidy-mobile
+
+2. Tech Stack
+-------------
+Built with:
+- React Native
+- Expo SDK 57
+- JavaScript / JSX
+
+Navigation:
+- React Navigation Native Stack
+- Bottom Tabs
+
+Backend/services:
+- Firebase Authentication
+- Firebase Firestore
+- Firebase Storage
+- Bunny Stream / Bunny CDN
+
+Local storage:
+- AsyncStorage
+
+Video:
+- expo-video
+- WebView for Bunny embedded player when needed
+
+Notifications:
+- expo-notifications
+- expo-device
+
+3. Main Config Files
+--------------------
+package.json:
+Defines Expo and React Native dependencies.
+
+app.json:
+Defines app name, icons, splash screen, iOS bundle ID, Android package name, permissions, plugins, Bunny domain, and EAS project ID.
+
+eas.json:
+Used for EAS Build and Submit.
+
+4. App Entry
+------------
+index.js:
+Registers the app.
+
+App.js:
+Main application shell. It loads theme, cached session, navigation, auth observer, notifications, and lazy-loaded screens.
+
+5. Screens
+----------
+LoginScreen:
+Login and registration.
+
+StudentPlatform:
+Student home dashboard.
+
+YearSelectionScreen:
+Year/stage selection.
+
+SubjectsScreen:
+Subject selection.
+
+ChaptersScreen:
+Chapter selection.
+
+LecturesScreen:
+Lecture selection.
+
+VideoPlayerScreen:
+Video playback screen.
+
+WatchHistoryScreen:
+Recently watched videos.
+
+ComputerLinkScreen:
+Computer linking support flow.
+
+ContactUs:
+Student support screen.
+
+LegalScreen:
+Privacy, terms, and account deletion pages.
+
+6. Authentication
+-----------------
+src/services/auth-service.js handles Firebase Auth, account creation, login, Firestore profile data, roles, device binding, and error messages.
+
+src/utils/deviceIdentity.js creates a stable device identifier.
+
+7. Student Data and Cache
+-------------------------
+src/hooks/useStudentData.js loads student profile, active codes, allowed years, subjects, chapters, and lessons. It filters the content by access rights and uses memory plus AsyncStorage cache for faster startup.
+
+8. Video Player
+---------------
+src/screens/VideoPlayerScreen.js and src/components/VideoPlayer.js implement video playback using expo-video.
+
+Supported features:
+- play/pause
+- 10-second seek
+- speed control
+- resume from last position
+- hidden bottom bar during playback
+- orientation support
+- pitch correction
+
+9. Bunny
+--------
+src/services/bunny-service.js parses Bunny URLs and resolves playable HLS/video URLs.
+
+10. Watch Progress
+------------------
+src/utils/videoProgress.js saves last watched video and playback progress using AsyncStorage.
+
+11. Access Control
+------------------
+src/utils/studentAccessGuard.js checks if the student has an active code for the requested stage/year.
+
+12. Themes
+----------
+src/theme/theme-config.js defines app themes.
+
+ThemePickerModal and ThemeToggleButton handle theme changes.
+
+13. Run Commands
+----------------
+Install:
+npm install
+
+Start:
+npx expo start --clear --lan
+
+Android:
+npx expo start --android
+
+iOS:
+npx expo start --ios
+
+EAS builds:
+npx eas build --platform android
+npx eas build --platform ios
+
+Submit:
+npx eas submit --platform ios --latest

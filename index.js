@@ -1,4 +1,11 @@
+import 'react-native-gesture-handler';
 import { registerRootComponent } from 'expo';
+import { I18nManager } from 'react-native';
+
+// Force RTL execution before the app tree is loaded.
+I18nManager.allowRTL(true);
+I18nManager.forceRTL(true);
+I18nManager.swapLeftAndRightInRTL(true);
 
 import App from './App';
 

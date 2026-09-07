@@ -8,35 +8,64 @@ import {
   ScrollView,
   ActivityIndicator,
   Alert,
+  Modal,
   KeyboardAvoidingView,
+  Linking,
   Platform,
   Dimensions,
   Image,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { FontAwesome5 } from '@expo/vector-icons';
-import * as Device from 'expo-device';
 import * as ScreenCapture from 'expo-screen-capture';
 import { addDoc, collection, doc, serverTimestamp, updateDoc } from 'firebase/firestore';
 import { app, auth, db, storage } from '../firebase';
 import ThemeToggleButton from '../components/ThemeToggleButton';
+import ThemePickerModal from '../components/ThemePickerModal';
+import { THEME_CHOICES } from '../theme/theme-config';
 import {
+  keepEnglishDigitsOnly,
+  isValidEmail,
+  normalizeEnglishDigits,
   registerStudentWithCode,
+  sendSharedPasswordResetEmail,
   SharedAuthError,
   signInWithSharedCredentials,
 } from '../services/auth-service';
-// استيراد مكتبة الأنيميشن
-import Animated, { 
-  FadeInDown, 
-  FadeInUp, 
-  ZoomIn, 
-  Layout, 
-  BounceIn 
-} from 'react-native-reanimated';
-
+import { getClientDevice } from '../utils/deviceIdentity';
 const { width } = Dimensions.get('window');
 
-export default function LoginScreen({ navigation, setUser, user, theme, themeMode, toggleTheme }) {
+const OFFICIAL_LINKS = {
+  privacy: 'https://el-hadidy-ei6w.vercel.app/privacy',
+  terms: 'https://el-hadidy-ei6w.vercel.app/terms',
+  deleteAccount: 'https://el-hadidy-ei6w.vercel.app/delete-account',
+};
+
+const EDUCATION_TYPES = [
+  {
+    key: 'college',
+    label: 'المرحلة الجامعية',
+    icon: 'university',
+    years: ['الفرقة الأولى', 'الفرقة الثانية', 'الفرقة الثالثة', 'الفرقة الرابعة'],
+  },
+  {
+    key: 'secondary',
+    label: 'المرحلة الثانوية',
+    icon: 'school',
+    years: ['الصف الأول الثانوي', 'الصف الثاني الثانوي', 'الصف الثالث الثانوي'],
+  },
+];
+
+export default function LoginScreen({
+  navigation,
+  setUser,
+  user,
+  theme,
+  themeMode,
+  themeOptions,
+  toggleTheme,
+  selectThemeMode,
+}) {
   const COLORS = {
     bg: theme.bg,
     card: theme.card,
@@ -54,31 +83,55 @@ export default function LoginScreen({ navigation, setUser, user, theme, themeMod
   const [isRegistering, setIsRegistering] = useState(false);
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [themePickerVisible, setThemePickerVisible] = useState(false);
+  const [forgotModalVisible, setForgotModalVisible] = useState(false);
+  const [resetEmail, setResetEmail] = useState('');
+  const availableThemeOptions = themeOptions?.length ? themeOptions : THEME_CHOICES;
   const [formData, setFormData] = useState({ username: '', password: '' });
   const [regData, setRegData] = useState({
     name: '',
     username: '',
+    email: '',
     phone: '',
     password: '',
+    educationType: 'college',
     year: 'الفرقة الأولى',
     code: '',
   });
 
-  const years = ['الفرقة الأولى', 'الفرقة الثانية', 'الفرقة الثالثة', 'الفرقة الرابعة'];
+  const selectedEducationType =
+    EDUCATION_TYPES.find((type) => type.key === regData.educationType) || EDUCATION_TYPES[0];
+  const years = selectedEducationType.years;
   const styles = createStyles(COLORS);
 
+  const chooseTheme = (nextThemeMode) => {
+    if (typeof selectThemeMode === 'function') {
+      selectThemeMode(nextThemeMode);
+    } else if (typeof toggleTheme === 'function') {
+      toggleTheme(nextThemeMode);
+    }
+    setThemePickerVisible(false);
+  };
+
   useEffect(() => {
-    ScreenCapture.preventScreenCaptureAsync();
+    const screenshotsAllowed =
+      user?.allowScreenshots === true ||
+      user?.screenshotAllowed === true ||
+      user?.canTakeScreenshots === true;
 
     let subscription;
-    if (user && user.role === 'student') {
+    if (user?.role === 'student' && !screenshotsAllowed) {
+      ScreenCapture.preventScreenCaptureAsync().catch(() => {});
       subscription = ScreenCapture.addScreenshotListener(async () => {
         handleAutoBan(user.id, user.name);
       });
+    } else {
+      ScreenCapture.allowScreenCaptureAsync().catch(() => {});
     }
 
     return () => {
       subscription?.remove();
+      ScreenCapture.allowScreenCaptureAsync().catch(() => {});
     };
   }, [user]);
 
@@ -105,14 +158,8 @@ export default function LoginScreen({ navigation, setUser, user, theme, themeMod
     }
   };
 
-  const buildDevice = () => ({
-    id: Device.osInternalBuildId || Device.modelName || Device.deviceName || 'unknown_device',
-    type: Device.osName || Platform.OS,
-    info: `${Device.brand || 'device'} ${Device.modelName || ''}`.trim(),
-  });
-
   const handleLogin = async () => {
-    const identifier = formData.username.trim().toLowerCase();
+    const identifier = normalizeEnglishDigits(formData.username).trim().toLowerCase();
     const password = formData.password.trim();
 
     if (!identifier || !password) {
@@ -123,7 +170,7 @@ export default function LoginScreen({ navigation, setUser, user, theme, themeMod
     try {
       const result = await signInWithSharedCredentials(
         { app, auth, db, storage },
-        { identifier, password, device: buildDevice() }
+        { identifier, password, device: await getClientDevice() }
       );
 
       setUser(result.user);
@@ -138,12 +185,42 @@ export default function LoginScreen({ navigation, setUser, user, theme, themeMod
     }
   };
 
-  const handleRegister = async () => {
-    const { name, username, phone, password, year } = regData;
-    const usernameClean = username.trim().toLowerCase();
+  const handleForgotPassword = async () => {
+    const email = normalizeEnglishDigits(resetEmail).trim().toLowerCase();
 
-    if (!name.trim() || !usernameClean || !phone.trim() || !password.trim()) {
+    if (!email) {
+      return Alert.alert('تنبيه', 'اكتب البريد الإلكتروني المرتبط بحسابك أولا.');
+    }
+
+    if (!isValidEmail(email)) {
+      return Alert.alert('تنبيه', 'برجاء إدخال بريد إلكتروني صحيح.');
+    }
+
+    setLoading(true);
+    try {
+      await sendSharedPasswordResetEmail({ auth, db }, email);
+      setForgotModalVisible(false);
+      setResetEmail('');
+      Alert.alert('تم الإرسال', 'تم إرسال رابط إعادة تعيين كلمة المرور إلى بريدك الإلكتروني.');
+    } catch (error) {
+      Alert.alert('تعذر الإرسال', error?.message || 'لا يمكن إرسال رابط إعادة التعيين حاليا.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleRegister = async () => {
+    const { name, username, email, phone, password, educationType, year } = regData;
+    const usernameClean = normalizeEnglishDigits(username).trim().toLowerCase();
+    const emailClean = normalizeEnglishDigits(email).trim().toLowerCase();
+    const phoneClean = keepEnglishDigitsOnly(phone);
+
+    if (!name.trim() || !usernameClean || !emailClean || !phoneClean || !password.trim()) {
       return Alert.alert('تنبيه', 'من فضلك أكمل كل البيانات المطلوبة');
+    }
+
+    if (!isValidEmail(emailClean)) {
+      return Alert.alert('تنبيه', 'برجاء إدخال بريد إلكتروني صحيح لاستخدامه في استعادة كلمة المرور.');
     }
 
     setLoading(true);
@@ -153,14 +230,16 @@ export default function LoginScreen({ navigation, setUser, user, theme, themeMod
         {
           name: name.trim(),
           username: usernameClean,
-          phone: phone.trim(),
+          email: emailClean,
+          phone: phoneClean,
           password: password.trim(),
+          educationType,
           year,
-          device: buildDevice(),
+          device: await getClientDevice(),
         }
       );
 
-      Alert.alert('تم', 'تم إنشاء الحساب بنجاح. يمكنك إرسال الكود من داخل المنصة للمراجعة.');
+      Alert.alert('تم', 'تم إنشاء الحساب بنجاح. يمكنك استخدام رمز التسجيل داخل المنصة إذا طُلب منك ذلك.');
       setUser(result.user);
     } catch (error) {
       Alert.alert('خطأ في التسجيل', error.message);
@@ -171,35 +250,36 @@ export default function LoginScreen({ navigation, setUser, user, theme, themeMod
 
   return (
     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.container}>
-      <ScrollView contentContainerStyle={styles.scrollContainer} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={styles.scrollContainer}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+      >
         
         {/* زر تغيير المظهر (Theme Toggle) */}
-        <Animated.View entering={FadeInDown.delay(100)} style={styles.topBar}>
-          <ThemeToggleButton mode={themeMode} onPress={toggleTheme} theme={theme} />
-        </Animated.View>
+        <View style={styles.topBar}>
+          <ThemeToggleButton mode={themeMode} onPress={() => setThemePickerVisible(true)} theme={theme} />
+        </View>
 
         {/* الكارت الأساسي مع حركة تغيير الحجم التلقائية عند التبديل */}
-        <Animated.View 
-          layout={Layout.springify().damping(18).stiffness(90)} 
-          style={styles.card}
-        >
-          <LinearGradient colors={[COLORS.accent, COLORS.accentAlt]} style={styles.hero}>
+        <View style={styles.card}>
+          <LinearGradient colors={theme.gradient || [COLORS.accent, COLORS.accentAlt]} style={styles.hero}>
             {/* أنيميشن اللوجو عند الفتح */}
-            <Animated.View entering={BounceIn.duration(1200)} style={styles.heroLogo}>
-              <Image source={require('../icon.png')} style={styles.logoImage} resizeMode="contain" />
-            </Animated.View>
+            <View style={styles.heroLogo}>
+              <Image source={require('../../assets/logo-main-transparent.png')} style={styles.logoImage} resizeMode="contain" />
+            </View>
             
-            {/* <Animated.Text entering={ZoomIn.delay(300)} style={styles.heroTitle}>
+            {/* <Text style={styles.heroTitle}>
               الحديدي
-            </Animated.Text> */}
-            <Animated.Text entering={ZoomIn.delay(400)} style={styles.heroSubtitle}>
+            </Text> */}
+            <Text style={styles.heroSubtitle}>
               {isRegistering ? 'إنشاء حساب جديد للمنصة' : 'مرحباً بك  في منصتك'}
-            </Animated.Text>
+            </Text>
           </LinearGradient>
 
           {!isRegistering ? (
             // نموذج تسجيل الدخول
-            <Animated.View entering={FadeInDown.duration(500)} style={styles.form}>
+            <View style={styles.form}>
               <View style={styles.inputWrapper}>
                 <FontAwesome5 name="user" size={16} color={COLORS.subText} style={styles.inputIcon} />
                 <TextInput
@@ -208,7 +288,7 @@ export default function LoginScreen({ navigation, setUser, user, theme, themeMod
                   placeholderTextColor={COLORS.subText}
                   autoCapitalize="none"
                   value={formData.username}
-                  onChangeText={(text) => setFormData({ ...formData, username: text })}
+                  onChangeText={(text) => setFormData({ ...formData, username: normalizeEnglishDigits(text) })}
                 />
               </View>
 
@@ -229,11 +309,22 @@ export default function LoginScreen({ navigation, setUser, user, theme, themeMod
               <TouchableOpacity onPress={handleLogin} disabled={loading} activeOpacity={0.88}>
                 <LinearGradient colors={[COLORS.accent, COLORS.accentAlt]} style={styles.button}>
                   {loading ? (
-                    <ActivityIndicator color="#fff" />
+                    <ActivityIndicator color={COLORS.buttonText} />
                   ) : (
                     <Text style={styles.btnText}>دخول المنصة</Text>
                   )}
                 </LinearGradient>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={() => {
+                  setResetEmail(formData.username.includes('@') ? formData.username.trim().toLowerCase() : '');
+                  setForgotModalVisible(true);
+                }}
+                disabled={loading}
+                activeOpacity={0.75}
+              >
+                <Text style={styles.forgotPasswordText}>نسيت كلمة المرور؟</Text>
               </TouchableOpacity>
 
               <TouchableOpacity onPress={() => setIsRegistering(true)} activeOpacity={0.7}>
@@ -241,10 +332,10 @@ export default function LoginScreen({ navigation, setUser, user, theme, themeMod
                   ليس لديك حساب؟ <Text style={styles.highlightText}>سجّل الآن</Text>
                 </Text>
               </TouchableOpacity>
-            </Animated.View>
+            </View>
           ) : (
             // نموذج إنشاء حساب
-            <Animated.View entering={FadeInDown.duration(500)} style={styles.form}>
+            <View style={styles.form}>
               <TextInput
                 style={styles.inputAlt}
                 placeholder="الاسم الكامل (كما في البطاقة)"
@@ -258,7 +349,18 @@ export default function LoginScreen({ navigation, setUser, user, theme, themeMod
                 placeholderTextColor={COLORS.subText}
                 autoCapitalize="none"
                 value={regData.username}
-                onChangeText={(text) => setRegData({ ...regData, username: text })}
+                onChangeText={(text) => setRegData({ ...regData, username: normalizeEnglishDigits(text) })}
+              />
+              <TextInput
+                style={styles.inputAlt}
+                placeholder="البريد الإلكتروني الحقيقي"
+                placeholderTextColor={COLORS.subText}
+                keyboardType="email-address"
+                autoCapitalize="none"
+                autoCorrect={false}
+                textContentType="emailAddress"
+                value={regData.email}
+                onChangeText={(text) => setRegData({ ...regData, email: normalizeEnglishDigits(text).trim().toLowerCase() })}
               />
               <TextInput
                 style={styles.inputAlt}
@@ -266,7 +368,7 @@ export default function LoginScreen({ navigation, setUser, user, theme, themeMod
                 placeholderTextColor={COLORS.subText}
                 keyboardType="phone-pad"
                 value={regData.phone}
-                onChangeText={(text) => setRegData({ ...regData, phone: text })}
+                onChangeText={(text) => setRegData({ ...regData, phone: keepEnglishDigitsOnly(text) })}
               />
               <TextInput
                 style={styles.inputAlt}
@@ -277,7 +379,38 @@ export default function LoginScreen({ navigation, setUser, user, theme, themeMod
                 onChangeText={(text) => setRegData({ ...regData, password: text })}
               />
 
-              <Text style={styles.sectionLabel}>الفرقة الدراسية</Text>
+              <Text style={styles.sectionLabel}>اختار المرحلة</Text>
+              <View style={styles.studyTypeContainer}>
+                {EDUCATION_TYPES.map((type) => {
+                  const active = regData.educationType === type.key;
+
+                  return (
+                    <TouchableOpacity
+                      key={type.key}
+                      style={[styles.studyTypeBtn, active && styles.studyTypeBtnActive]}
+                      onPress={() => setRegData({
+                        ...regData,
+                        educationType: type.key,
+                        year: type.years[0],
+                      })}
+                      activeOpacity={0.75}
+                    >
+                      <FontAwesome5
+                        name={type.icon}
+                        size={14}
+                        color={active ? COLORS.buttonText : COLORS.accent}
+                      />
+                      <Text style={[styles.studyTypeText, active && styles.studyTypeTextActive]}>
+                        {type.label}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+
+              <Text style={styles.sectionLabel}>
+                اختار السنة الدراسية
+              </Text>
               <View style={styles.yearContainer}>
                 {years.map((year) => (
                   <TouchableOpacity
@@ -296,7 +429,7 @@ export default function LoginScreen({ navigation, setUser, user, theme, themeMod
               <TouchableOpacity onPress={handleRegister} disabled={loading} activeOpacity={0.88}>
                 <LinearGradient colors={[COLORS.accent, COLORS.accentAlt]} style={styles.button}>
                   {loading ? (
-                    <ActivityIndicator color="#fff" />
+                    <ActivityIndicator color={COLORS.buttonText} />
                   ) : (
                     <Text style={styles.btnText}>إنشاء الحساب</Text>
                   )}
@@ -308,39 +441,96 @@ export default function LoginScreen({ navigation, setUser, user, theme, themeMod
                   لديك حساب بالفعل؟ <Text style={styles.highlightText}>تسجيل الدخول</Text>
                 </Text>
               </TouchableOpacity>
-            </Animated.View>
+            </View>
           )}
 
           {/* زر الدعم الفني بأنيميشن دخول من الأسفل */}
-          <Animated.View entering={FadeInUp.delay(600)}>
+          <View>
             <TouchableOpacity onPress={() => navigation.navigate('Support')} style={styles.supportBtn} activeOpacity={0.6}>
               <FontAwesome5 name="headset" size={14} color={COLORS.subText} />
               <Text style={styles.supportText}> تواجه مشكلة؟ تواصل مع الدعم الفني</Text>
             </TouchableOpacity>
             <View style={styles.legalRow}>
-              <TouchableOpacity onPress={() => navigation.navigate('Legal', { type: 'Privacy' })}>
+              <TouchableOpacity onPress={() => Linking.openURL(OFFICIAL_LINKS.privacy)}>
                 <Text style={styles.legalLink}>الخصوصية</Text>
               </TouchableOpacity>
               <Text style={styles.legalSep}>•</Text>
-              <TouchableOpacity onPress={() => navigation.navigate('Legal', { type: 'Terms' })}>
+              <TouchableOpacity onPress={() => Linking.openURL(OFFICIAL_LINKS.terms)}>
                 <Text style={styles.legalLink}>الشروط</Text>
               </TouchableOpacity>
               <Text style={styles.legalSep}>•</Text>
-              <TouchableOpacity onPress={() => navigation.navigate('Legal', { type: 'DeleteAccount' })}>
+              <TouchableOpacity onPress={() => Linking.openURL(OFFICIAL_LINKS.deleteAccount)}>
                 <Text style={styles.legalLink}>حذف الحساب</Text>
               </TouchableOpacity>
+              <Text style={styles.legalSep}>•</Text>
+              <TouchableOpacity onPress={() => navigation.navigate('Legal', { type: 'Developer' })}>
+                <Text style={styles.legalLink} numberOfLines={1}>{'عن\u00A0المطور'}</Text>
+              </TouchableOpacity>
             </View>
-          </Animated.View>
+          </View>
 
-        </Animated.View>
+        </View>
       </ScrollView>
+      <Modal
+        visible={forgotModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setForgotModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.resetCard}>
+            <Text style={styles.resetTitle}>استعادة كلمة المرور</Text>
+            <Text style={styles.resetText}>
+              اكتب البريد الإلكتروني الحقيقي المرتبط بحسابك، وسنرسل لك رابط إعادة التعيين تلقائياً.
+            </Text>
+            <TextInput
+              style={styles.resetInput}
+              placeholder="البريد الإلكتروني"
+              placeholderTextColor={COLORS.subText}
+              keyboardType="email-address"
+              autoCapitalize="none"
+              autoCorrect={false}
+              textContentType="emailAddress"
+              value={resetEmail}
+              onChangeText={(text) => setResetEmail(normalizeEnglishDigits(text).trim().toLowerCase())}
+            />
+            <TouchableOpacity onPress={handleForgotPassword} disabled={loading} activeOpacity={0.88}>
+              <LinearGradient colors={[COLORS.accent, COLORS.accentAlt]} style={styles.button}>
+                {loading ? (
+                  <ActivityIndicator color={COLORS.buttonText} />
+                ) : (
+                  <Text style={styles.btnText}>إرسال رابط إعادة التعيين</Text>
+                )}
+              </LinearGradient>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => {
+                setForgotModalVisible(false);
+                setResetEmail('');
+              }}
+              disabled={loading}
+              activeOpacity={0.75}
+            >
+              <Text style={styles.resetCancelText}>إلغاء</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+      <ThemePickerModal
+        visible={themePickerVisible}
+        theme={theme}
+        activeThemeMode={themeMode}
+        themeOptions={availableThemeOptions}
+        onSelectTheme={chooseTheme}
+        onClose={() => setThemePickerVisible(false)}
+      />
     </KeyboardAvoidingView>
   );
 }
 
 function createStyles(COLORS) {
   return StyleSheet.create({
-    container: { flex: 1, backgroundColor: COLORS.bg },
+    container: { flex: 1, backgroundColor: COLORS.bg, direction: 'rtl' },
     scrollContainer: { flexGrow: 1, justifyContent: 'center', alignItems: 'center', paddingVertical: 36 },
     topBar: { width: width * 0.9, maxWidth: 430, alignItems: 'flex-end', marginBottom: 12 },
     card: {
@@ -351,7 +541,7 @@ function createStyles(COLORS) {
       padding: 22,
       borderWidth: 1,
       borderColor: COLORS.border,
-      shadowColor: COLORS.accent,
+      shadowColor: COLORS.shadow || COLORS.accent,
       shadowOffset: { width: 0, height: 12 },
       shadowOpacity: 0.18,
       shadowRadius: 30,
@@ -375,38 +565,33 @@ function createStyles(COLORS) {
       width: 200,
       height: 200,
       borderRadius: 40,
-      backgroundColor: 'rgba(255,255,255,0.08)',
+      backgroundColor: COLORS.cardAlt,
       alignItems: 'center',
       justifyContent: 'center',
       borderWidth: 1.5,
-      borderColor: 'rgba(255,255,255,0.25)',
-      shadowColor: '#000',
+      borderColor: COLORS.border,
+      shadowColor: COLORS.shadow || COLORS.text,
       shadowOffset: { width: 0, height: 8 },
       shadowOpacity: 0.25,
       shadowRadius: 16,
       elevation: 10,
     },
     heroLogo: {
-      width: 130,
-      height: 130,
-      borderRadius: 34,
-      backgroundColor: 'rgba(255,255,255,0.15)',
+      width: 190,
+      height: 190,
       alignItems: 'center',
       justifyContent: 'center',
-      overflow: 'hidden',
-      borderWidth: 1,
-      borderColor: 'rgba(255,255,255,0.3)',
     },
-    logoImage: { width: '90%', height: '90%' },
+    logoImage: { width: '100%', height: '100%' },
     heroDivider: {
       width: 48,
       height: 3,
       borderRadius: 99,
-      backgroundColor: 'rgba(255,255,255,0.4)',
+      backgroundColor: COLORS.border,
       marginVertical: 14,
     },
-    heroTitle: { color: '#fff', fontSize: 34, fontWeight: '900', textAlign: 'center', letterSpacing: 0 },
-    heroSubtitle: { color: 'rgba(255,255,255,0.85)', fontSize: 16, marginTop: 4, textAlign: 'center', fontWeight: '700' },
+    heroTitle: { color: COLORS.buttonText, fontSize: 34, fontWeight: '900', textAlign: 'center', writingDirection: 'rtl', letterSpacing: 0 },
+    heroSubtitle: { color: COLORS.buttonText, fontSize: 16, marginTop: 4, textAlign: 'center', writingDirection: 'rtl', fontWeight: '700', opacity: 0.86 },
     form: { width: '100%' },
     inputWrapper: {
       flexDirection: 'row-reverse',
@@ -427,13 +612,31 @@ function createStyles(COLORS) {
       height: 64,
       color: COLORS.text,
       textAlign: 'right',
+      writingDirection: 'rtl',
       borderWidth: 1,
       borderColor: COLORS.border,
       fontSize: 16,
     },
-    input: { flex: 1, color: COLORS.text, textAlign: 'right', fontSize: 16 },
+    input: { flex: 1, color: COLORS.text, textAlign: 'right', writingDirection: 'rtl', fontSize: 16 },
     inputIcon: { marginLeft: 12 },
-    sectionLabel: { color: COLORS.text, textAlign: 'right', marginBottom: 12, fontSize: 16, fontWeight: '900' },
+    sectionLabel: { color: COLORS.text, textAlign: 'right', writingDirection: 'rtl', marginBottom: 12, fontSize: 16, fontWeight: '900' },
+    studyTypeContainer: { flexDirection: 'row-reverse', gap: 10, marginBottom: 18 },
+    studyTypeBtn: {
+      flex: 1,
+      minHeight: 50,
+      borderWidth: 1,
+      borderColor: COLORS.border,
+      borderRadius: 18,
+      backgroundColor: COLORS.cardAlt,
+      flexDirection: 'row-reverse',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 8,
+      paddingHorizontal: 12,
+    },
+    studyTypeBtnActive: { borderColor: COLORS.accent, backgroundColor: COLORS.accent },
+    studyTypeText: { color: COLORS.text, fontSize: 14, fontWeight: '900', textAlign: 'center', writingDirection: 'rtl' },
+    studyTypeTextActive: { color: COLORS.buttonText },
     yearContainer: { flexDirection: 'row-reverse', flexWrap: 'wrap', justifyContent: 'space-between', marginBottom: 20 },
     yearBtn: {
       width: '48%',
@@ -446,11 +649,12 @@ function createStyles(COLORS) {
       backgroundColor: COLORS.cardAlt,
     },
     yearBtnActive: { borderColor: COLORS.accent, backgroundColor: COLORS.accent },
-    yearBtnText: { color: COLORS.subText, fontSize: 14, fontWeight: '900' },
-    yearBtnTextActive: { color: '#fff' },
+    yearBtnText: { color: COLORS.subText, fontSize: 14, fontWeight: '900', textAlign: 'center', writingDirection: 'rtl' },
+    yearBtnTextActive: { color: COLORS.buttonText },
     button: { padding: 18, borderRadius: 20, alignItems: 'center', marginTop: 10, shadowColor: COLORS.accent, shadowOffset: {width: 0, height: 4}, shadowOpacity: 0.3, shadowRadius: 8, elevation: 5 },
-    btnText: { color: COLORS.buttonText, fontWeight: '900', fontSize: 18 },
-    switchText: { color: COLORS.subText, textAlign: 'center', marginTop: 24, fontSize: 15, fontWeight: '700' },
+    btnText: { color: COLORS.buttonText, fontWeight: '900', fontSize: 18, textAlign: 'center', writingDirection: 'rtl' },
+    forgotPasswordText: { color: COLORS.accent, textAlign: 'center', writingDirection: 'rtl', marginTop: 14, fontSize: 14, fontWeight: '900' },
+    switchText: { color: COLORS.subText, textAlign: 'center', writingDirection: 'rtl', marginTop: 24, fontSize: 15, fontWeight: '700' },
     highlightText: { color: COLORS.accent, fontWeight: '900' },
     supportBtn: {
       flexDirection: 'row-reverse',
@@ -459,9 +663,46 @@ function createStyles(COLORS) {
       marginTop: 20,
       padding: 10,
     },
-    supportText: { color: COLORS.subText, fontSize: 14, fontWeight: '800' },
-    legalRow: { flexDirection: 'row-reverse', justifyContent: 'center', alignItems: 'center', gap: 8, marginTop: 8 },
-    legalLink: { color: COLORS.accent, fontSize: 13, fontWeight: '900' },
+    supportText: { color: COLORS.subText, fontSize: 14, fontWeight: '800', textAlign: 'center', writingDirection: 'rtl' },
+    modalOverlay: {
+      flex: 1,
+      backgroundColor: COLORS.overlay || 'rgba(0,0,0,0.55)',
+      justifyContent: 'center',
+      alignItems: 'center',
+      padding: 22,
+    },
+    resetCard: {
+      width: '100%',
+      maxWidth: 430,
+      backgroundColor: COLORS.card,
+      borderRadius: 26,
+      padding: 22,
+      borderWidth: 1,
+      borderColor: COLORS.border,
+      shadowColor: COLORS.shadow || COLORS.text,
+      shadowOffset: { width: 0, height: 12 },
+      shadowOpacity: 0.22,
+      shadowRadius: 24,
+      elevation: 12,
+    },
+    resetTitle: { color: COLORS.text, fontSize: 20, fontWeight: '900', textAlign: 'right', writingDirection: 'rtl', marginBottom: 8 },
+    resetText: { color: COLORS.subText, fontSize: 14, lineHeight: 22, textAlign: 'right', writingDirection: 'rtl', marginBottom: 16 },
+    resetInput: {
+      backgroundColor: COLORS.cardAlt,
+      borderRadius: 18,
+      paddingHorizontal: 16,
+      height: 58,
+      color: COLORS.text,
+      textAlign: 'right',
+      writingDirection: 'rtl',
+      borderWidth: 1,
+      borderColor: COLORS.border,
+      fontSize: 15,
+      marginBottom: 4,
+    },
+    resetCancelText: { color: COLORS.subText, textAlign: 'center', writingDirection: 'rtl', marginTop: 14, fontSize: 15, fontWeight: '900' },
+    legalRow: { flexDirection: 'row-reverse', flexWrap: 'wrap', justifyContent: 'center', alignItems: 'center', gap: 8, marginTop: 8 },
+    legalLink: { color: COLORS.accent, fontSize: 13, fontWeight: '900', minWidth: 72, textAlign: 'center', writingDirection: 'rtl' },
     legalSep: { color: COLORS.subText, fontSize: 12 },
   });
 }

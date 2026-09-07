@@ -1,0 +1,14 @@
+node_modules/
+.expo/
+.expo-*-check/
+.expo-fullscreen-resume-check/
+functions/
+dist/
+web-build/
+_archive/
+temp*/
+eas-build-log*.txt
+expo-config-*.txt
+npm-debug.*
+yarn-debug.*
+yarn-error.*

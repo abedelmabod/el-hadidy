@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "1031581630612",
+    "project_id": "el-hadidy-app",
+    "storage_bucket": "el-hadidy-app.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1031581630612:android:b472f3d21d7fdc833b7481",
+        "android_client_info": {
+          "package_name": "com.elhadidy.platform"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCzOITUISkk2VtQXEqRVwkyBqZTmlaoMdI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

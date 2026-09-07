@@ -1,41 +1,78 @@
 {
   "expo": {
     "name": "el-hadidy",
-    "slug": "el-hadidy",
+    "slug": "elhadedy",
     "version": "1.0.0",
-    "orientation": "portrait",
+    "scheme": "elhadidy",
+    "orientation": "default",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
-
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
-
     "ios": {
-      "supportsTablet": true
+      "bundleIdentifier": "com.elhadidy.platform",
+      "buildNumber": "2",
+      "supportsTablet": false,
+      "requireFullScreen": true,
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSUserNotificationsUsageDescription": "نستخدم الإشعارات لإبلاغ الطلاب المسجلين مسبقًا عند إضافة محاضرات أو ملفات تعليمية جديدة."
+      }
     },
-
     "android": {
+      "package": "com.elhadidy.platform",
+      "versionCode": 17,
+      "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
+        "backgroundColor": "#0A0805"
       },
-      "edgeToEdgeEnabled": true
+      "edgeToEdgeEnabled": true,
+      "permissions": [
+        "android.permission.POST_NOTIFICATIONS"
+      ],
+      "blockedPermissions": [
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.READ_MEDIA_IMAGES",
+        "android.permission.READ_MEDIA_VIDEO",
+        "android.permission.READ_MEDIA_VISUAL_USER_SELECTED"
+      ]
     },
-
     "web": {
       "favicon": "./assets/favicon.png",
       "bundler": "metro",
       "output": "single"
     },
-
     "experiments": {
       "baseUrl": "/el-hadidy/"
     },
-
-    "plugins": ["expo-font"]
+    "extra": {
+      "bunnyStreamDomain": "vz-7d113049-fda.b-cdn.net",
+      "eas": {
+        "projectId": "713edd2a-8a3a-45e1-8f4e-ae1674cb3efb"
+      }
+    },
+    "plugins": [
+      "expo-font",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/notification-icon.png",
+          "color": "#EFBF04"
+        }
+      ],
+      [
+        "expo-screen-orientation",
+        {
+          "initialOrientation": "DEFAULT"
+        }
+      ]
+    ],
+    "owner": "elhadedys-team"
   }
 }

@@ -1,92 +1,145 @@
-/**
- * مفتاح تخزين وضع الثيم في التخزين المحلي
- */
 export const THEME_STORAGE_KEY = "elhadidy-mobile-theme-mode";
-
-/**
- * الألوان المستخرجة من الصورة (البالتة البنية الدافئة):
- * 1. بني محروق: #291C0E
- * 2. بني كستنائي: #6E473B
- * 3. بيج ترابي: #A78D78
- * 4. بيج فاتح: #BEB5A9
- * 5. كريمي: #E1D4C2
- */
 
 export const mobileThemes = {
   light: {
     mode: "light",
-    // 1. الخلفيات والأسطح
-    bg: "#E1D4C2",           // الخلفية الأساسية (الكريمي)
-    card: "#FFFFFF",         // البطاقات (أبيض ناصع لتبرز وتصنع تبايناً مع الخلفية)
-    cardAlt: "#F5F0E8",      // بطاقات المستوى الثاني (كريمي فاتح جداً)
-    surface: "#BEB5A9",      // أسطح ناعمة
-    
-    // 2. الحدود
-    border: "#A78D78",       // الحدود (بيج ترابي متناسق)
-    borderSoft: "#D1C7B9",   // حدود خفيفة ومندمجة
-    
-    // 3. النصوص (التركيز على المقروئية)
-    text: "#291C0E",         // النص الأساسي (أغمق لون لتباين عالٍ ومقروئية ممتازة)
-    subText: "#6E473B",      // النص الفرعي (بني كستنائي)
-    muted: "#A78D78",        // نصوص باهتة للمعلومات غير الهامة
-    
-    // 4. الألوان التفاعلية (الأزرار والروابط)
-    accent: "#6E473B",       // بني كستنائي يبرز بشكل ممتاز كزر
-    accentAlt: "#291C0E",    // لون نشط بديل
-    accentBlue: "#6E473B",   
-    accentGreen: "#5C7A4D",  // أخضر طبيعي يتماشى مع البنيات
-    accentOrange: "#A78D78", 
-    
-    // 5. حالات النظام
-    danger: "#A05A4A",       // أحمر طوبي متناسق
-    success: "#5C7A4D",      // أخضر دافئ
-    info: "#6E473B",
-    
-    // 6. عناصر إضافية
-    buttonText: "#FFFFFF",   // نص الأزرار (أبيض فوق الزر البني ليكون واضحاً تماماً)
-    bottomBar: "#FFFFFF",    // شريط التنقل (أبيض ليطابق البطاقات)
-    shadow: "#291C0E20",     // ظل شفاف من نفس درجة البني الغامق
+    bg: "#F7EDE1",
+    card: "#FFF9F2",
+    cardAlt: "#E9D5C1",
+    surface: "#D8B894",
+    border: "#A8754F",
+    borderSoft: "#DFC6AF",
+    text: "#2D1A10",
+    subText: "#6F4931",
+    muted: "#9A7355",
+    accent: "#7B4A2A",
+    accentAlt: "#4B2B19",
+    accentBlue: "#756451",
+    accentGreen: "#6A7A4A",
+    accentOrange: "#B87945",
+    danger: "#A95343",
+    success: "#6A7A4A",
+    info: "#756451",
+    buttonText: "#FFFFFF",
+    bottomBar: "#FFF8EF",
+    overlay: "#2D1A10CC",
+    shadow: "#2D1A1024",
+    gradient: ["#4B2B19", "#7B4A2A", "#B87945"],
   },
-  
+
   dark: {
     mode: "dark",
-    // 1. الخلفيات والأسطح (التركيز على العمق)
-    bg: "#181008",           // خلفية داكنة جداً (أغمق من البالتة) لتعطي مساحة لبروز البطاقات
-    card: "#291C0E",         // البطاقات (استخدام أغمق لون في البالتة هنا يصنع عمقاً احترافياً)
-    cardAlt: "#382816",      // بطاقات المستوى الثاني (أفتح قليلاً من البطاقة الأساسية)
-    surface: "#1F150A",      // أسطح داكنة
-    
-    // 2. الحدود
-    border: "#6E473B",       // حدود واضحة تعزل العناصر بلطف
-    borderSoft: "#3A2817",   // حدود شبه مخفية
-    
-    // 3. النصوص (التركيز على المقروئية في الظلام)
-    text: "#E1D4C2",         // النص الأساسي (كريمي فاتح يمنع إجهاد العين ويوفر تبايناً مثالياً)
-    subText: "#BEB5A9",      // النص الفرعي (بيج فاتح)
-    muted: "#8A7461",        // نصوص باهتة
-    
-    // 4. الألوان التفاعلية (يجب أن تكون فاتحة في الوضع الداكن لتظهر)
-    accent: "#A78D78",       // بيج ترابي يبرز بقوة فوق الخلفية الداكنة
-    accentAlt: "#E1D4C2",    // لون نشط بديل ساطع
-    accentBlue: "#A78D78", 
-    accentGreen: "#8E9B6B",  // أخضر فاتح يناسب الوضع المظلم
-    accentOrange: "#BEB5A9",
-    
-    // 5. حالات النظام
-    danger: "#D67A6B",       // أحمر فاتح ليظهر بوضوح فوق البني الداكن
-    success: "#8E9B6B",      
-    info: "#A78D78",
-    
-    // 6. عناصر إضافية
-    buttonText: "#291C0E",   // نص الأزرار (بني داكن فوق زر فاتح لضمان قراءته بسهولة)
-    bottomBar: "#291C0E",    // شريط التنقل السفلي (بنفس لون البطاقات)
-    shadow: "#00000080",     // ظل أسود قوي لفصل العناصر في الظلام
+    bg: "#FFF8F0",
+    card: "#FFFFFF",
+    cardAlt: "#FFE8D2",
+    surface: "#FFD4B0",
+    border: "#E6B188",
+    borderSoft: "#F2D2B7",
+    text: "#2F1D12",
+    subText: "#70452C",
+    muted: "#A5724E",
+    accent: "#D87535",
+    accentAlt: "#914516",
+    accentBlue: "#3D82A8",
+    accentGreen: "#6A9B4A",
+    accentOrange: "#FFB34E",
+    danger: "#D45F4A",
+    success: "#6A9B4A",
+    info: "#3D82A8",
+    buttonText: "#FFFFFF",
+    bottomBar: "#FFF2E6",
+    overlay: "#2F1D12CC",
+    shadow: "#2F1D121F",
+    gradient: ["#914516", "#D87535", "#FFB34E"],
+  },
+
+  blue: {
+    mode: "blue",
+    bg: "#ECF8FF",
+    card: "#FFFFFF",
+    cardAlt: "#D8F0FF",
+    surface: "#BFE3FA",
+    border: "#9DCEE8",
+    borderSoft: "#C9E7F7",
+    text: "#10283A",
+    subText: "#42677F",
+    muted: "#7194AA",
+    accent: "#1577B8",
+    accentAlt: "#0E4E86",
+    accentBlue: "#23A5E8",
+    accentGreen: "#2FA36B",
+    accentOrange: "#F49A32",
+    danger: "#C95A5A",
+    success: "#2FA36B",
+    info: "#23A5E8",
+    buttonText: "#FFFFFF",
+    bottomBar: "#FFFFFF",
+    overlay: "#10283ACC",
+    shadow: "#10283A20",
+    gradient: ["#0E4E86", "#1577B8", "#23C1E8"],
+  },
+
+  green: {
+    mode: "green",
+    bg: "#EFFBF1",
+    card: "#FFFFFF",
+    cardAlt: "#DDF4E0",
+    surface: "#C5E7C8",
+    border: "#A7D2AA",
+    borderSoft: "#D2EBD4",
+    text: "#122918",
+    subText: "#45694B",
+    muted: "#719679",
+    accent: "#2F9348",
+    accentAlt: "#176832",
+    accentBlue: "#2E91A0",
+    accentGreen: "#2F9348",
+    accentOrange: "#F0A23B",
+    danger: "#C75D4A",
+    success: "#2F9348",
+    info: "#2E91A0",
+    buttonText: "#FFFFFF",
+    bottomBar: "#FFFFFF",
+    overlay: "#122918CC",
+    shadow: "#12291820",
+    gradient: ["#176832", "#2F9348", "#91D447"],
+  },
+
+  night: {
+    mode: "night",
+    bg: "#0B0F14",
+    card: "#111827",
+    cardAlt: "#1F2937",
+    surface: "#151C2B",
+    border: "#2D3748",
+    borderSoft: "#263244",
+    text: "#F8FAFC",
+    subText: "#CBD5E1",
+    muted: "#94A3B8",
+    accent: "#3B82F6",
+    accentAlt: "#2563EB",
+    accentBlue: "#38BDF8",
+    accentGreen: "#22C55E",
+    accentOrange: "#F59E0B",
+    danger: "#EF4444",
+    success: "#22C55E",
+    info: "#38BDF8",
+    buttonText: "#FFFFFF",
+    bottomBar: "#0F172A",
+    overlay: "#000000E6",
+    shadow: "#00000066",
+    gradient: ["#0B0F14", "#111827", "#1F2937"],
   },
 };
 
-/**
- * دالة استرجاع الثيم بناءً على الوضع
- */
+export const THEME_CHOICES = [
+  { key: "light", label: "الأصلي البني", preview: ["#4B2B19", "#7B4A2A", "#B87945"] },
+  { key: "dark", label: "البرتقالي الهادئ", preview: ["#914516", "#D87535", "#FFB34E"] },
+  { key: "blue", label: "الأزرق الحيوي", preview: ["#0E4E86", "#1577B8", "#23C1E8"] },
+  { key: "green", label: "الأخضر الحيوي", preview: ["#176832", "#2F9348", "#91D447"] },
+  { key: "night", label: "دارك مود", preview: ["#0B0F14", "#111827", "#3B82F6"] },
+];
+
 export function resolveMobileTheme(mode) {
   return mobileThemes[mode] || mobileThemes.light;
 }

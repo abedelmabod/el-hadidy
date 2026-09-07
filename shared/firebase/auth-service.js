@@ -15,6 +15,7 @@ import {
 import {
   createUserWithEmailAndPassword,
   onAuthStateChanged,
+  sendPasswordResetEmail,
   signInWithEmailAndPassword,
   signOut,
 } from "firebase/auth";
@@ -35,7 +36,25 @@ export class SharedAuthError extends Error {
 }
 
 export function normalizeIdentifier(value) {
-  return String(value || "").trim().toLowerCase();
+  return normalizeEnglishDigits(value).trim().toLowerCase();
+}
+
+export function normalizeEmail(value) {
+  return normalizeEnglishDigits(value).trim().toLowerCase();
+}
+
+export function isValidEmail(value) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizeEmail(value));
+}
+
+export function normalizeEnglishDigits(value = "") {
+  return String(value || "")
+    .replace(/[٠-٩]/g, (digit) => String(digit.charCodeAt(0) - 1632))
+    .replace(/[۰-۹]/g, (digit) => String(digit.charCodeAt(0) - 1776));
+}
+
+export function keepEnglishDigitsOnly(value = "") {
+  return normalizeEnglishDigits(value).replace(/\D/g, "");
 }
 
 export function buildAuthEmail(identifier) {
@@ -88,6 +107,26 @@ async function findUserByIdentifier(db, identifier) {
   return null;
 }
 
+async function findUserByEmail(db, email) {
+  const normalizedEmail = normalizeEmail(email);
+  if (!normalizedEmail) return null;
+
+  for (const collectionConfig of ROLE_COLLECTIONS) {
+    const snapshot = await getDocs(
+      query(
+        collection(db, collectionConfig.name),
+        where("email", "==", normalizedEmail)
+      )
+    );
+
+    if (!snapshot.empty) {
+      return mapQueryDocument(collectionConfig, snapshot.docs[0]);
+    }
+  }
+
+  return null;
+}
+
 async function findUserByUid(db, uid) {
   for (const collectionConfig of ROLE_COLLECTIONS) {
     const directDoc = await getDoc(doc(db, collectionConfig.name, uid));
@@ -109,8 +148,35 @@ function mapFirebaseAuthError(error) {
   if (code === "auth/invalid-credential" || code === "auth/wrong-password") {
     return new SharedAuthError("INVALID_CREDENTIALS", "اسم المستخدم أو كلمة المرور غير صحيحة.");
   }
+  if (code === "auth/invalid-email") {
+    return new SharedAuthError("INVALID_EMAIL", "برجاء إدخال بريد إلكتروني صحيح.");
+  }
+  if (code === "auth/user-not-found") {
+    return new SharedAuthError("PROFILE_NOT_FOUND", "لا يوجد حساب مرتبط بهذا البريد الإلكتروني.");
+  }
+  if (code === "auth/email-already-in-use") {
+    return new SharedAuthError("EMAIL_IN_USE", "البريد الإلكتروني مستخدم بالفعل.");
+  }
+  if (code === "auth/weak-password") {
+    return new SharedAuthError("WEAK_PASSWORD", "كلمة المرور ضعيفة. اختر كلمة مرور أقوى.");
+  }
+  if (code === "auth/too-many-requests") {
+    return new SharedAuthError("TOO_MANY_REQUESTS", "تمت محاولات كثيرة. حاول مرة أخرى بعد قليل.");
+  }
   return new SharedAuthError("AUTH_ERROR", error?.message || "تعذر إتمام المصادقة حالياً.");
 }
+
+const getAllowedDeviceCount = (studentData = {}) => {
+  const parsed = Number(studentData.maxDevices ?? studentData.deviceLimit ?? 1);
+  if (!Number.isFinite(parsed)) return 1;
+  return Math.max(1, Math.min(10, Math.floor(parsed)));
+};
+
+const getRegisteredDeviceIds = (studentData = {}) => {
+  const ids = Array.isArray(studentData.deviceIds) ? studentData.deviceIds : [];
+  const legacyId = studentData.deviceId ? [studentData.deviceId] : [];
+  return Array.from(new Set([...ids, ...legacyId].map((id) => String(id || "").trim()).filter(Boolean)));
+};
 
 /**
  * دالة التحقق من صلاحية وصول الطالب
@@ -119,6 +185,9 @@ function mapFirebaseAuthError(error) {
 async function ensureStudentAccess(db, profile, device = {}) {
   const studentRef = doc(db, "students", profile.id);
   const studentData = profile.data;
+  const deviceId = String(device.id || "").trim();
+  const maxDevices = getAllowedDeviceCount(studentData);
+  const registeredDeviceIds = getRegisteredDeviceIds(studentData);
 
   // 1. التحقق من الحظر (يمنع الدخول تماماً)
   if (studentData.isBanned) {
@@ -129,11 +198,11 @@ async function ensureStudentAccess(db, profile, device = {}) {
     );
   }
 
-  // 2. التحقق من الجهاز (يمنع الدخول إذا حاول الدخول من جهاز مختلف)
+  // 2. التحقق من عدد الأجهزة المسموح بها
   if (
-    studentData.deviceId &&
-    device.id &&
-    String(studentData.deviceId) !== String(device.id)
+    deviceId &&
+    registeredDeviceIds.length >= maxDevices &&
+    !registeredDeviceIds.includes(deviceId)
   ) {
     throw new SharedAuthError(
       "DEVICE_MISMATCH",
@@ -142,19 +211,30 @@ async function ensureStudentAccess(db, profile, device = {}) {
     );
   }
 
-  // تسجيل الجهاز لأول مرة إذا لم يكن مسجلاً
-  if (!studentData.deviceId && device.id) {
+  // تسجيل جهاز جديد إذا كان العدد المسموح لم يكتمل
+  if (deviceId && !registeredDeviceIds.includes(deviceId)) {
+    const nextDeviceIds = [...registeredDeviceIds, deviceId];
     const devicePatch = {
-      deviceId: device.id,
+      deviceId: studentData.deviceId || nextDeviceIds[0],
+      deviceIds: nextDeviceIds,
+      deviceCount: nextDeviceIds.length,
+      maxDevices,
       deviceType: device.type || null,
       deviceInfo: device.info || null,
+      lastDeviceId: deviceId,
+      lastDeviceLinkedAt: serverTimestamp(),
     };
     await updateDoc(studentRef, devicePatch);
     return { ...studentData, ...devicePatch };
   }
 
   // لاحظ: لم نعد نتحقق من usedCode أو isSubscribed هنا للسماح للطالب بفتح التطبيق
-  return studentData;
+  return {
+    ...studentData,
+    maxDevices,
+    deviceIds: registeredDeviceIds,
+    deviceCount: registeredDeviceIds.length,
+  };
 }
 
 export async function signInWithSharedCredentials(services, payload) {
@@ -167,14 +247,22 @@ export async function signInWithSharedCredentials(services, payload) {
     throw new SharedAuthError("MISSING_CREDENTIALS", "أدخل اسم المستخدم وكلمة المرور.");
   }
 
+  const isEmailLogin = identifier.includes("@");
+  const profileByUsername = isEmailLogin ? null : await findUserByIdentifier(db, identifier);
+  const profileByEmail = isEmailLogin ? await findUserByEmail(db, identifier) : null;
+  const loginEmail = isEmailLogin
+    ? normalizeEmail(identifier)
+    : normalizeEmail(profileByUsername?.data?.email) || buildAuthEmail(identifier);
+
   try {
     const credential = await signInWithEmailAndPassword(
       auth,
-      buildAuthEmail(identifier),
+      loginEmail,
       password
     );
 
-    const resolvedProfile = await findUserByUid(db, credential.user.uid);
+    const resolvedProfile =
+      (await findUserByUid(db, credential.user.uid)) || profileByUsername || profileByEmail;
 
     if (!resolvedProfile) {
       throw new SharedAuthError("PROFILE_NOT_FOUND", "ملف المستخدم غير موجود.");
@@ -205,13 +293,19 @@ export async function registerStudentWithCode(services, payload) {
   const { auth, db } = services;
   const name = String(payload?.name || "").trim();
   const username = normalizeIdentifier(payload?.username);
+  const email = normalizeEmail(payload?.email);
   const password = String(payload?.password || "").trim();
+  const phone = keepEnglishDigitsOnly(payload?.phone);
   const year = String(payload?.year || "").trim();
-  const codeValue = String(payload?.code || "").trim().toUpperCase();
+  const codeValue = normalizeEnglishDigits(payload?.code).trim().toUpperCase();
   const device = payload?.device || {};
 
-  if (!name || !username || !password || !year || !codeValue) {
+  if (!name || !username || !email || !password || !phone || !year) {
     throw new SharedAuthError("MISSING_FIELDS", "برجاء إدخال جميع البيانات.");
+  }
+
+  if (!isValidEmail(email)) {
+    throw new SharedAuthError("INVALID_EMAIL", "برجاء إدخال بريد إلكتروني صحيح.");
   }
 
   const existingUser = await findUserByIdentifier(db, username);
@@ -219,59 +313,85 @@ export async function registerStudentWithCode(services, payload) {
     throw new SharedAuthError("USERNAME_TAKEN", "اسم المستخدم محجوز بالفعل.");
   }
 
-  const codeSnapshot = await getDocs(
-    query(collection(db, "codes"), where("code", "==", codeValue))
-  );
-
-  if (codeSnapshot.empty) {
-    throw new SharedAuthError("INVALID_CODE", "كود التفعيل غير صحيح.");
-  }
-
-  const codeDoc = codeSnapshot.docs[0];
-  const codeData = codeDoc.data();
-
-  if (codeData.isUsed) {
-    throw new SharedAuthError("USED_CODE", "تم استخدام هذا الكود مسبقاً.");
-  }
-
-  if (codeData.year && normalizeYear(codeData.year) !== normalizeYear(year)) {
-    throw new SharedAuthError("YEAR_MISMATCH", `الكود مخصص لـ ${codeData.year}.`);
+  const existingEmail = await findUserByEmail(db, email);
+  if (existingEmail) {
+    throw new SharedAuthError("EMAIL_IN_USE", "البريد الإلكتروني مستخدم بالفعل.");
   }
 
   const credential = await createUserWithEmailAndPassword(
     auth,
-    buildAuthEmail(username),
+    email,
     password
   );
 
   const studentProfile = {
     name,
     username,
+    phone,
     year,
-    email: credential.user.email,
+    email: credential.user.email || email,
     authUid: credential.user.uid,
     isBanned: false,
-    isSubscribed: true,
-    usedCode: codeValue,
+    isSubscribed: false,
+    usedCode: "",
+    pendingCode: codeValue || "",
+    codeReviewStatus: codeValue ? "pending" : "",
+    maxDevices: 1,
     deviceId: device.id || null,
+    deviceIds: device.id ? [device.id] : [],
+    deviceCount: device.id ? 1 : 0,
     deviceType: device.type || null,
     deviceInfo: device.info || null,
     createdAt: serverTimestamp(),
   };
 
   await setDoc(doc(db, "students", credential.user.uid), studentProfile);
-  await updateDoc(doc(db, "codes", codeDoc.id), {
-    isUsed: true,
-    usedBy: username,
-    usedById: credential.user.uid,
-    isActive: true,
-    usedAt: serverTimestamp(),
-  });
+
+  if (codeValue) {
+    await addDoc(collection(db, "teacher_code_requests"), {
+      studentId: credential.user.uid,
+      studentName: name,
+      username,
+      phone,
+      year,
+      code: codeValue,
+      status: "pending",
+      createdAt: serverTimestamp(),
+    });
+  }
 
   return {
     authMode: "firebase",
     user: buildSessionUser(credential.user.uid, "student", studentProfile, credential.user),
   };
+}
+
+export async function sendSharedPasswordResetEmail(services, identifier) {
+  const { auth, db } = services;
+  const normalizedIdentifier = normalizeIdentifier(identifier);
+
+  if (!normalizedIdentifier) {
+    throw new SharedAuthError("MISSING_IDENTIFIER", "أدخل البريد الإلكتروني أولا.");
+  }
+
+  let resetEmail = normalizedIdentifier.includes("@") ? normalizeEmail(normalizedIdentifier) : "";
+
+  if (!resetEmail) {
+    const profile = await findUserByIdentifier(db, normalizedIdentifier);
+    resetEmail = normalizeEmail(profile?.data?.email);
+  }
+
+  if (!isValidEmail(resetEmail) || resetEmail.endsWith("@elhadidy.app")) {
+    throw new SharedAuthError("INVALID_EMAIL", "لا يوجد بريد إلكتروني حقيقي مرتبط بهذا الحساب.");
+  }
+
+  try {
+    await sendPasswordResetEmail(auth, resetEmail);
+  } catch (error) {
+    throw mapFirebaseAuthError(error);
+  }
+
+  return { ok: true, email: resetEmail };
 }
 
 export function observeSharedAuthSession(services, onChange) {

@@ -31,7 +31,15 @@ yarn-error.*
 *.pem
 
 # local env files
+.env
 .env*.local
+
+# local scratch and archived cleanup
+_archive/
+temp*/
+com.facebook.react.fabric.mounting.SurfaceMountingManager
+com.swmansion.gesturehandler.react.RNGestureHandlerModule
+eh.t$b
 
 # typescript
 *.tsbuildinfo
@@ -39,3 +47,14 @@ yarn-error.*
 # generated native folders
 /ios
 /android
+
+# expo export sanity-check output
+.expo-*-check/
+.expo-sanity-export/
+
+# build + debug logs
+eas-build-log*.txt
+firebase-debug.log
+expo-config-check.txt
+expo-config-review.txt
+introspect-config.json
